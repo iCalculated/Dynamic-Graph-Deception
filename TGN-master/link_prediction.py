@@ -17,7 +17,7 @@ import numpy as np
 import pickle
 from pathlib import Path
 
-from utils.utils import eval_edge_prediction
+from utils.utils import eval_edge_prediction, eval_deceiver_prediction
 from net.tgn import TGN
 from utils.utils import EarlyStopMonitor, RandEdgeSampler, get_neighbor_finder
 from utils.data_processing import get_data, compute_time_statistics
@@ -222,11 +222,18 @@ for i in range(args.n_runs):
                 pos_prob, neg_prob = tgn.compute_edge_probabilities(sources_batch, destinations_batch, negatives_batch,
                                                                     timestamps_batch, edge_idxs_batch, NUM_NEIGHBORS)
 
-                n_nodes = len(set(train_data.sources))
-                sources = np.array(range(1,n_nodes+1))
-                tstamps = np.array([timestamps_batch[-1]]*n_nodes)
-                deceiver_prob = tgn.compute_deceiver_probability(sources, tstamps, tstamps, 1)
-                deceiver_label = torch.tensor(train_data.deceiver_labels[0], dtype=torch.float, device=device)
+                # n_nodes = len(set(train_data.sources))
+                # sources = np.array(range(1,n_nodes+1))
+                # destinations = np.array(range(n_nodes+2, 2*n_nodes+2))
+                # tstamps = np.array([timestamps_batch[-1]]*n_nodes)
+                # edgeIdxs = np.array([edge_idxs_batch[-1]]*n_nodes)
+                # deceiver_prob = tgn.compute_deceiver_probability(sources, destinations, tstamps, edgeIdxs, 1)
+                # deceiver_label = torch.tensor(train_data.deceiver_labels[0], dtype=torch.float, device=device)
+                
+                deceiver_labels_batch = train_data.deceiver_labels[start_idx:end_idx]
+
+                deceiver_prob = tgn.compute_deceiver_probability(sources_batch, destinations_batch, timestamps_batch, edge_idxs_batch, 1)
+                deceiver_label = torch.tensor(deceiver_labels_batch, dtype=torch.float, device=device)
 
                 loss += criterion(pos_prob.squeeze(), pos_label) + criterion(neg_prob.squeeze(), neg_label) + criterion(deceiver_prob.squeeze(), deceiver_label)
             
@@ -259,6 +266,17 @@ for i in range(args.n_runs):
       
         val_ap, val_auc = eval_edge_prediction(model=tgn, negative_edge_sampler=val_rand_sampler, 
                                                data=val_data, n_neighbors=NUM_NEIGHBORS)
+
+        if USE_MEMORY:
+            # Backup memory after validation so it can be used for testing (since test edges are
+            # strictly later in time than validation edges)
+            val_memory_backup = tgn.memory.backup_memory()
+            # Restore memory we had at the end of training to be used when validating on unseen nodes.
+            tgn.memory.restore_memory(train_memory_backup)
+
+        n_nodes = len(set(train_data.sources))
+        deceiver_val_ap, deceiver_val_auc = eval_deceiver_prediction(model=tgn, negative_edge_sampler=val_rand_sampler, data=val_data, n_nodes=n_nodes, n_neighbors=1)
+
         if USE_MEMORY:
             # Backup memory after validation so it can be used for testing (since test edges are
             # strictly later in time than validation edges)
@@ -296,6 +314,7 @@ for i in range(args.n_runs):
         logger.info('Epoch mean loss: {}'.format(np.mean(m_loss)))
         logger.info('transductive val auc: {}, inductive val auc: {}'.format(val_auc, nn_val_auc))
         logger.info('transductive val ap: {}, inductive val ap: {}'.format(val_ap, nn_val_ap))
+        logger.info('Deception val -- auc: {}, ap: {}'.format(deceiver_val_auc, deceiver_val_ap))
       
         # Early stopping
         if early_stopper.early_stop_check(val_ap):
@@ -323,13 +342,20 @@ for i in range(args.n_runs):
     
     if USE_MEMORY:
       tgn.memory.restore_memory(val_memory_backup)
+
+    n_nodes = len(set(train_data.sources))
+    deceiver_test_ap, deceiver_test_auc = eval_deceiver_prediction(model=tgn, negative_edge_sampler=test_rand_sampler, data=test_data, n_nodes=n_nodes, n_neighbors=1)
     
+    if USE_MEMORY:
+      tgn.memory.restore_memory(val_memory_backup)
+
     # Test on unseen nodes
     nn_test_ap, nn_test_auc = eval_edge_prediction(model=tgn, negative_edge_sampler=nn_test_rand_sampler, 
                                                    data=new_node_test_data, n_neighbors=NUM_NEIGHBORS)
     
     logger.info('Test statistics: Transductive -- auc: {}, ap: {}'.format(test_auc, test_ap))
     logger.info('Test statistics: Inductive -- auc: {}, ap: {}'.format(nn_test_auc, nn_test_ap))
+    logger.info('Deception Test statistics: -- auc: {}, ap: {}'.format(deceiver_test_auc, deceiver_test_ap))
     
     # Save results for this run
     pickle.dump({

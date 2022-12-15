@@ -144,10 +144,12 @@ class TGN(torch.nn.Module):
     
       # MLP to compute probability on an edge given two node embeddings
       self.affinity_score = MergeLayer(self.n_node_features, self.n_node_features, self.n_node_features, 1)
-      self.deception_score = torch.nn.Linear(self.n_node_features, 1)
+      self.deception_score_fc1 = torch.nn.Linear(self.n_node_features, 32)
+      self.deception_score_fc2 = torch.nn.Linear(32, 1)
       self.deception_act = torch.nn.ReLU()
 
-      torch.nn.init.xavier_normal_(self.deception_score.weight)
+      torch.nn.init.xavier_normal_(self.deception_score_fc1.weight)
+      torch.nn.init.xavier_normal_(self.deception_score_fc2.weight)
     
   def set_neighbor_finder(self, neighbor_finder):
     self.neighbor_finder = neighbor_finder
@@ -403,7 +405,7 @@ class TGN(torch.nn.Module):
 
     return pos_score.sigmoid(), neg_score.sigmoid()
 
-  def compute_deceiver_probability(self, source_nodes, edge_times, edge_idxs, n_neighbors=1):
+  def compute_deceiver_probability(self, source_nodes, destination_nodes, edge_times, edge_idxs, n_neighbors=1):
     """
     
     Compute probabilities for edges between sources and destination and between sources and
@@ -425,11 +427,15 @@ class TGN(torch.nn.Module):
     # Seems like node embeddings for source and destination are calculated separately
     # Since source and destination are both users in our case, we could concatenate them and send to the linear layer for classification.
     source_node_embedding, destination_node_embedding, negative_node_embedding = self.compute_temporal_embeddings(
-      source_nodes, source_nodes, source_nodes, edge_times, edge_idxs, n_neighbors)
+      source_nodes, destination_nodes, source_nodes, edge_times, edge_idxs, n_neighbors)
 
     # maybe use n_neighbors = 1, just one hop
     
     # then calculate the deception probability
-    score = self.deception_act(self.deception_score(source_node_embedding))
+    out = source_node_embedding #torch.cat([source_node_embedding, destination_node_embedding], dim=1)
+    fc1_score = self.deception_act(self.deception_score_fc1(out))
+    score = self.deception_score_fc2(fc1_score)
+
+    # print(score.sigmoid())
 
     return score.sigmoid()

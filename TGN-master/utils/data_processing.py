@@ -48,7 +48,7 @@ def get_data(dataset_name, different_new_nodes_between_val_and_test=False):
     edge_features = np.load('./data/ml_{}.npy'.format(dataset_name))
     node_features = np.load('./data/ml_{}_node.npy'.format(dataset_name))
 
-    graph_df['deceiver_label'] = graph_df['deceiver_label'].apply(lambda x: np.array([int(val) for val in x[1:-1].split('.') if val.strip().isnumeric()]))
+    # graph_df['deceiver_label'] = graph_df['deceiver_label'].apply(lambda x: np.array([int(val) for val in x[1:-1].split('.') if val.strip().isnumeric()]))
 
     # val and test splite timestamp: 70%-15%-15%
     val_time, test_time = list(np.quantile(graph_df.ts, [0.70, 0.85]))  # return two float numbers

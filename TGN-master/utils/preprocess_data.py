@@ -27,7 +27,7 @@ def preprocess(data_name):
     
     with open(data_name) as f:
         
-        s = next(f)
+        # s = next(f)
         
         for idx, line in enumerate(f):
             e = line.strip().split(',')
@@ -36,7 +36,7 @@ def preprocess(data_name):
             ts = float(e[2])
             label = float(e[3])
             feat = np.array([float(e[4])])
-            deceiver_label = np.array([float(x) for x in e[5:]])
+            deceiver_label = float(e[5]) #np.array([float(x) for x in e[5:]])
         
             u_list.append(u)
             i_list.append(i)
