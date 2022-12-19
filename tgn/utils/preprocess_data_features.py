@@ -19,7 +19,7 @@ def preprocess(data_name):
     label: Dynamic node labels
     feat: Interaction features
 
-    See JODIE paper for deatials about the meaning of user and item
+    See JODIE paper for details about the meaning of user and item
     """
     u_list, i_list, ts_list, label_list, deceiver_label_list = [], [], [], [], []
     feat_l = []
@@ -41,6 +41,7 @@ def preprocess(data_name):
             ts_list.append(ts)
             label_list.append(label)
             idx_list.append(idx)
+
             feat_l.append(feat)
             deceiver_label_list.append(deceiver_label)
 
@@ -91,9 +92,7 @@ def reindex(df, bipartite=True):
     157473  2400  8723  2678373.0    0.0  157474
     """
     new_df = df.copy()
-
     if bipartite:
-
         assert df.u.max() - df.u.min() + 1 == len(df.u.unique())
         assert df.i.max() - df.i.min() + 1 == len(df.i.unique())
 
@@ -104,9 +103,7 @@ def reindex(df, bipartite=True):
         new_df.u += 1  # source node indeies (start from 1)
         new_df.i += 1
         new_df.idx += 1
-
     else:
-
         new_df.u += 1
         new_df.i += 1
         new_df.idx += 1
@@ -115,31 +112,28 @@ def reindex(df, bipartite=True):
 
 
 def run(data_name, bipartite=True):
+    print(bipartite)
     Path("data/").mkdir(parents=True, exist_ok=True)
     PATH = "../data/processed_networks/{}.csv".format(data_name)
     OUT_DF = "./data/ml_{}.csv".format(data_name)
     OUT_FEAT = "./data/ml_{}.npy".format(data_name)
     OUT_NODE_FEAT = "./data/ml_{}_node.npy".format(data_name)
 
-    df, feat = preprocess(
-        PATH
-    )  # get the interaction feature vectors and a dataframe which contains index, u, i, ts, label
+    df, feat = preprocess(PATH)
     new_df = reindex(df, bipartite)  # get bipartite version of df
 
     empty = np.zeros(feat.shape[1])[np.newaxis, :]  # with shape [1, feat_dim]
     feat = np.vstack([empty, feat])  # with shape [interactions, feat_dim]
 
     max_idx = max(new_df.u.max(), new_df.i.max())  # number of nodes
-    rand_feat = np.zeros(
-        (max_idx + 1, 172)
-    )  # initialize node features with fixed 172 dimension size for datasets without dynamic node features
+    # initialize node features with fixed 172 dimension size for datasets without dynamic node features
+    rand_feat = np.zeros((max_idx + 1, 172))
 
     new_df.to_csv(OUT_DF)  # temporal bipartite interaction graph
     np.save(OUT_FEAT, feat)  # interaction (i.e. Temporal edge) features
     np.save(OUT_NODE_FEAT, rand_feat)  # initial node features
 
 
-### Entry
 parser = argparse.ArgumentParser("Interface for TGN data preprocessing")
 parser.add_argument(
     "--data",
@@ -147,6 +141,11 @@ parser.add_argument(
     help="Dataset name (eg. wikipedia or reddit)",
     default="wikipedia",
 )
+parser.add_argument(
+    "--bipartite",
+    action="store_true",
+    help="Whether the graph is bipartite",
+)
 
 args = parser.parse_args()
-run(args.data)
+run(args.data, args.bipartite)
