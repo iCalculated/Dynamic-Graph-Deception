@@ -134,9 +134,13 @@ class TGN(torch.nn.Module):
             self.n_node_features, self.n_node_features, self.n_node_features, 1
         )
         # Avinash code
-        self.deception_score = torch.nn.Linear(self.n_node_features, 1)
+        self.deception_score_fc1 = torch.nn.Linear(self.n_node_features, 32)
+        self.deception_score_fc2 = torch.nn.Linear(32, 1)
         self.deception_act = torch.nn.ReLU()
-        torch.nn.init.xavier_normal_(self.deception_score.weight)
+
+        # TODO: initialize normally
+        torch.nn.init.xavier_normal_(self.deception_score_fc1.weight)
+        torch.nn.init.xavier_normal_(self.deception_score_fc2.weight)
 
     def compute_temporal_embeddings(
         self,
@@ -396,7 +400,7 @@ class TGN(torch.nn.Module):
 
     # Avinash code, might need a compatibility check
     def compute_deceiver_probability(
-        self, source_nodes, edge_times, edge_idxs, n_neighbors=1
+        self, source_nodes, destination_nodes, edge_times, edge_idxs, n_neighbors=1
     ):
         """
         Compute probabilities for edges between sources and destination and between sources and
@@ -422,12 +426,19 @@ class TGN(torch.nn.Module):
             destination_node_embedding,
             negative_node_embedding,
         ) = self.compute_temporal_embeddings(
-            source_nodes, source_nodes, source_nodes, edge_times, edge_idxs, n_neighbors
+            source_nodes,
+            destination_nodes,
+            source_nodes,
+            edge_times,
+            edge_idxs,
+            n_neighbors,
         )
 
         # maybe use n_neighbors = 1, just one hop
 
         # then calculate the deception probability
-        score = self.deception_act(self.deception_score(source_node_embedding))
+        out = source_node_embedding  # torch.cat([source_node_embedding, destination_node_embedding], dim=1), TODO: add destination here
+        fc1_score = self.deception_act(self.deception_score_fc1(out))
+        score = self.deception_score_fc2(fc1_score)
 
         return score.sigmoid()

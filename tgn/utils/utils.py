@@ -238,3 +238,54 @@ class NeighborFinder:
                     ] = source_edge_idxs
 
         return neighbors, edge_idxs, edge_times
+
+
+########################## Evaluate on val & test ##########################
+def eval_deceiver_prediction(
+    model, negative_edge_sampler, data, n_nodes, n_neighbors, batch_size=200
+):
+
+    # Ensures the random sampler uses a seed for evaluation (i.e. we sample always the same
+    # negatives for validation / test set)
+    assert negative_edge_sampler.seed is not None
+    negative_edge_sampler.reset_random_state()
+
+    val_ap, val_auc = [], []
+    with torch.no_grad():
+        model = model.eval()
+        # While usually the test batch size is as big as it fits in memory, here we keep it the same
+        # size as the training batch size, since it allows the memory to be updated more frequently,
+        # and later test batches to access information from interactions in previous test batches
+        # through the memory
+        TEST_BATCH_SIZE = batch_size
+        num_test_instance = len(data.sources)
+        num_test_batch = math.ceil(num_test_instance / TEST_BATCH_SIZE)
+
+        for k in range(num_test_batch):
+            s_idx = k * TEST_BATCH_SIZE
+            e_idx = min(num_test_instance, s_idx + TEST_BATCH_SIZE)
+            # sources_batch = np.array(range(1,n_nodes+1))
+            # destinations_batch = np.array(range(n_nodes+2, 2*n_nodes+2))
+            # timestamps_batch = data.timestamps[s_idx:e_idx]
+            # timestamps_batch = np.array([timestamps_batch[-1]]*n_nodes)
+            # edge_idxs_batch = data.edge_idxs[s_idx:e_idx]
+            # edge_idxs_batch = np.array([edge_idxs_batch[-1]]*n_nodes)
+            sources_batch = data.sources[s_idx:e_idx]
+            destinations_batch = data.destinations[s_idx:e_idx]
+            timestamps_batch = data.timestamps[s_idx:e_idx]
+            edge_idxs_batch = data.edge_idxs[s_idx:e_idx]
+            deceiver_labels_batch = data.deceiver_labels[s_idx:e_idx]
+
+            deceiver_prob = model.compute_deceiver_probability(
+                sources_batch, destinations_batch, timestamps_batch, edge_idxs_batch, 1
+            )
+
+            pred_score = deceiver_prob.cpu().numpy()
+            true_label = deceiver_labels_batch
+
+            # print(true_label, pred_score)
+
+            val_ap.append(average_precision_score(true_label, pred_score))
+            val_auc.append(roc_auc_score(true_label, pred_score))
+
+    return np.mean(val_ap), np.mean(val_auc)
