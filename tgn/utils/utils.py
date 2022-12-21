@@ -39,6 +39,10 @@ class MLP(torch.nn.Module):
         self.act = torch.nn.ReLU()
         self.dropout = torch.nn.Dropout(p=drop, inplace=False)
 
+        # torch.nn.init.xavier_normal_(self.fc_1.weight)
+        # torch.nn.init.xavier_normal_(self.fc_2.weight)
+        # torch.nn.init.xavier_normal_(self.fc_3.weight)
+
     def forward(self, x):
         x = self.act(self.fc_1(x))
         x = self.dropout(x)

@@ -161,7 +161,6 @@ def get_message_aggregator(aggregator_type, device):
         return LastMessageAggregator(device=device)
     elif aggregator_type == "mean":
         return MeanMessageAggregator(device=device)
-    else:
         raise ValueError(
             "Message aggregator {} not implemented".format(aggregator_type)
         )
